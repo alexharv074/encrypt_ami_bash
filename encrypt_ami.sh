@@ -247,5 +247,5 @@ else
   deregister_image $unencrypted_image_id
 fi
 
-echo "Encrypted AMI ID: $(<unencrypted_image_id)"
+echo "Encrypted AMI ID: $(<encrypted_image_id)"
 clean_up
