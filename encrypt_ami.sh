@@ -10,6 +10,67 @@ TAGS"
   exit 1
 }
 
+build_user_data() {
+  local os_type=$1
+  [ "$os_type" != "windows" ] && return
+  cat <<'EOF'
+  <powershell>
+    # Check for the Version of Operating System
+    $Cmd = Get-WmiObject -Class Win32_OperatingSystem | ForEach-Object -MemberName Caption
+    $Get_OS = $Cmd -match '(\d+)'
+
+    # Query and get the version number of the OS
+    if ($Get_Os) {
+      $Os_Type = $matches[1]
+    }
+
+    if ($Os_Type -eq '2012') {
+      Write-Host "The operating system is $Os_Type"
+      # Configuring the Launch Setting for win2k12
+      $EC2SettingsFile = "C:\\Program Files\\Amazon\\Ec2ConfigService\\Settings\\Config.xml"
+      $xml = [xml](get-content $EC2SettingsFile)
+      $xmlElement = $xml.get_DocumentElement()
+      $xmlElementToModify = $xmlElement.Plugins
+      $enableElements = "Ec2SetPassword", `
+        "Ec2SetComputerName", `
+        "Ec2HandleUserData", `
+        "Ec2DynamicBootVolumeSize"
+      $xmlElementToModify.Plugin | Where-Object {$enableElements -contains $_.name} | Foreach-Object {$_.State="Enabled"}
+      $xml.Save($EC2SettingsFile)
+
+      # Sysprep Configuration setting for win2k12
+      $EC2SettingsFile = "C:\\Program Files\\Amazon\\Ec2ConfigService\\Settings\\BundleConfig.xml"
+      $xml = [xml](get-content $EC2SettingsFile)
+      $xmlElement = $xml.get_DocumentElement()
+      foreach ($element in $xmlElement.Property) {
+        if ($element.Name -eq "AutoSysprep") {
+          $element.Value = "Yes"
+        }
+      }
+      $xml.Save($EC2SettingsFile)
+
+    } elseif ($Os_Type -eq '2016') {
+      Write-Host "The operating system is $Os_Type"
+      # Configuring the Launch setting to enable the initialization for windows server 2016
+      # Changes are made to LaunchConfig.json file
+      $LaunchConfigFile = "C:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Config\\LaunchConfig.json"
+      $jsoncontent = Get-Content $LaunchConfigFile | ConvertFrom-Json
+      $jsoncontent.SetComputerName = 'true'
+      $jsoncontent | ConvertTo-Json  | set-content $LaunchConfigFile
+
+      # This script schedules the instance to initialize during the next boot.
+      C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeInstance.ps1 -Schedule
+
+      # The EC2Launch service runs Sysprep, a Microsoft tool that enables creation of customized Windows AMI that can be reused
+      C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\SysprepInstance.ps1
+
+    } else {
+      echo "No Operating System Found"
+    }
+  </powershell>
+EOF
+}
+
 this_account() {
   aws sts get-caller-identity \
     --query Account --output text
@@ -24,28 +85,125 @@ account_of() {
 copy_image() {
   local name=$1
   local image_id=$2
-  aws ec2 copy-image --name $name --source-image-id $image_id \
-    --source-region ap-southeast-2 --encrypted \
-    --query ImageId --output text
+  local encrypted_image_id
+
+  encrypted_image_id=$(aws ec2 copy-image \
+    --name $name \
+    --source-image-id $image_id \
+    --source-region ap-southeast-2 \
+    --encrypted \
+    --query ImageId \
+    --output text)
+
+  wait_for_image_state $encrypted_image_id 'available'
+
+  echo $encrypted_image_id
 }
 
-wait_for_image() {
+create_image() {
+  local instance_id=$1
+  local name=$2
+  local unencrypted_image_id
+  unencrypted_image_id=$(aws ec2 create-image --instance-id $instance_id \
+    --name $name --query ImageId --output text)
+  wait_for_image_state $unencrypted_image_id 'available'
+  echo $unencrypted_image_id
+}
+
+deregister_image() {
   local image_id=$1
+  aws ec2 deregister-image --image-id $image_id
+}
+
+wait_for_image_state() {
+  local image_id=$1
+  local desired_state=$2
+  local state
   while true ; do
     state=$(aws ec2 describe-images --image-id $image_id \
       --query 'Images[].State' --output text)
-    [ "$state" == "available" ] && break
+    [ "$state" == "$desired_state" ] && break
     echo "state: $state"
     sleep 10
   done
 }
 
+wait_for_instance_status() {
+  local instance_id=$1
+  local desired_state=$2
+  local desired_status=$3
+  local state
+  local statu # $status is a built-in.
+
+  while true ; do
+    state=$(aws ec2 describe-instance-status --instance-ids $instance_id \
+      --query 'InstanceStatuses[].InstanceState.Name' --output text)
+    [ "$state" == "$desired_state" ] && break
+    echo "state: $state"
+    sleep 1
+  done
+
+  [ -z "$desired_status" ] && return
+
+  while true ; do
+    statu=$(aws ec2 describe-instance-status --instance-ids $instance_id \
+      --query 'InstanceStatuses[].InstanceStatus.Status' --output text)
+  done
+}
+
+run_instance() {
+  local image_id=$1
+  local iam_instance_profile=$2
+  local subnet_id=$3
+  local os_type=$4
+
+  local user_data
+  local instance_id
+
+  user_data=$(build_user_data $os_type)
+
+  instance_id=$(aws ec2 run-instances --image-id $image_id \
+    --instance-type 'c4.2xlarge' \
+    --subnet-id $subnet_id \
+    --iam-instance-profile "Name=$iam_instance_profile" \
+    --user-data "$user_data" \
+    --tag-specifications "ResourceType=instance,Tags=${tags}" \
+    --query 'Instances[].InstanceId' \
+    --output text)
+
+  wait_for_instance_status $instance_id 'running' 'ok'
+
+  echo $instance_id
+}
+
+stop_instance() {
+  local instance_id=$1
+  aws ec2 stop-instances --instance-ids $instance_id
+  wait_for_instance_status $instance_id 'stopped'
+}
+
+terminate_instance() {
+  local instance_id=$1
+  aws ec2 terminate-instances --instance-ids $instance_id
+  wait_for_instance_status $instance_id 'terminated'
+}
+
+[ "$1" == "-h" ] && usage
+
 source_image_id=$1
 image_name=$2
 os_type=$3
 subnet_id=$4
-tags=$5
+iam_instance_profile=$5
+tags=$6
 
 if [ "$(this_account)" == "$(account_of $source_image_id)" ] ; then
-  wait_for_image $(copy_image $source_image_id $image_name)
+  encrypted_image_id=$(copy_image $source_image_id $image_name)
+else
+  instance_id=$(run_instance $source_image_id $iam_instance_profile $subnet_id $os_type)
+  stop_instance $instance_id
+  unencrypted_image_id=$(create_image $instance_id "${image_name}-unencrypted")
+  terminate_instance $instance_id
+  encrypted_image_id=$(copy_image $unencrypted_image_id $image_name)
+  deregister_image $unencrypted_image_id
 fi
