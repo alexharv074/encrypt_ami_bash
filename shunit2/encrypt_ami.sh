@@ -41,7 +41,7 @@ testUsage() {
 
 testScript() {
   echo 1 > count
-  . $script_under_test 'ami-0114e9d25da9ed405' 'encrypted-alex' 'windows' 'xxx' > /dev/null
+  . $script_under_test 'ami-0114e9d25da9ed405' 'encrypted-alex' 'windows' 'xxx' > /dev/null 2> /dev/null
 
   cat > expected_log <<EOF
 aws sts get-caller-identity --query Account --output text

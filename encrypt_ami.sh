@@ -87,6 +87,9 @@ copy_image() {
   local image_id=$2
   local encrypted_image_id
 
+  echo "Creating the AMI ..."
+
+  set -x
   encrypted_image_id=$(aws ec2 copy-image \
     --name $name \
     --source-image-id $image_id \
@@ -94,6 +97,7 @@ copy_image() {
     --encrypted \
     --query ImageId \
     --output text)
+  set +x
 
   wait_for_image_state $encrypted_image_id 'available'
 
@@ -104,21 +108,34 @@ create_image() {
   local instance_id=$1
   local name=$2
   local unencrypted_image_id
+
+  echo "Creating the AMI: $name"
+
+  set -x
   unencrypted_image_id=$(aws ec2 create-image --instance-id $instance_id \
     --name $name --query ImageId --output text)
+  set +x
+
   wait_for_image_state $unencrypted_image_id 'available'
   echo $unencrypted_image_id
 }
 
 deregister_image() {
   local image_id=$1
+  echo "Deregistering the AMI: $image_id"
+
+  set -x
   aws ec2 deregister-image --image-id $image_id
+  set +x
 }
 
 wait_for_image_state() {
   local image_id=$1
   local desired_state=$2
   local state
+
+  echo "Waiting for AMI to become $desired_state..."
+
   while true ; do
     state=$(aws ec2 describe-images --image-id $image_id \
       --query 'Images[].State' --output text)
@@ -132,8 +149,11 @@ wait_for_instance_status() {
   local instance_id=$1
   local desired_state=$2
   local desired_status=$3
+
   local state
   local statu # $status is a built-in.
+
+  echo "Waiting for instance ($instance_id) to become $desired_state..."
 
   while true ; do
     state=$(aws ec2 describe-instance-status --instance-ids $instance_id \
@@ -144,6 +164,8 @@ wait_for_instance_status() {
   done
 
   [ -z "$desired_status" ] && return
+
+  echo "Waiting for instance ($instance_id) to become $desired_status..."
 
   while true ; do
     statu=$(aws ec2 describe-instance-status --instance-ids $instance_id \
@@ -162,6 +184,8 @@ run_instance() {
 
   user_data=$(build_user_data $os_type)
 
+  echo "Launching a source AWS instance..."
+
   instance_id=$(aws ec2 run-instances --image-id $image_id \
     --instance-type 'c4.2xlarge' \
     --subnet-id $subnet_id \
@@ -178,12 +202,18 @@ run_instance() {
 
 stop_instance() {
   local instance_id=$1
+
+  echo "Stopping the source AWS instance..."
+
   aws ec2 stop-instances --instance-ids $instance_id
   wait_for_instance_status $instance_id 'stopped'
 }
 
 terminate_instance() {
   local instance_id=$1
+
+  echo "Terminating the source AWS instance..."
+
   aws ec2 terminate-instances --instance-ids $instance_id
   wait_for_instance_status $instance_id 'terminated'
 }
@@ -198,12 +228,14 @@ iam_instance_profile=$5
 tags=$6
 
 if [ "$(this_account)" == "$(account_of $source_image_id)" ] ; then
-  encrypted_image_id=$(copy_image $source_image_id $image_name)
+  copy_image $source_image_id $image_name
 else
-  instance_id=$(run_instance $source_image_id $iam_instance_profile $subnet_id $os_type)
+  run_instance $source_image_id $iam_instance_profile $subnet_id $os_type
+  instance_id=$(<instance_id)
   stop_instance $instance_id
-  unencrypted_image_id=$(create_image $instance_id "${image_name}-unencrypted")
+  create_image $instance_id "${image_name}-unencrypted"
+  unencrypted_image_id=$(<unencrypted_image_id)
   terminate_instance $instance_id
-  encrypted_image_id=$(copy_image $unencrypted_image_id $image_name)
+  copy_image $unencrypted_image_id $image_name
   deregister_image $unencrypted_image_id
 fi
