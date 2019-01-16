@@ -41,12 +41,12 @@ testUsage() {
 
 testScript() {
   echo 1 > count
-  . $script_under_test 'ami-0114e9d25da9ed405' 'encrypted-alex' 'windows' 'xxx' > /dev/null 2> /dev/null
+  . $script_under_test 'ami-0114e9d25da9ed405' 'encrypted-alex' 'windows' > /dev/null 2> /dev/null
 
   cat > expected_log <<EOF
 aws sts get-caller-identity --query Account --output text
 aws ec2 describe-images --image-id ami-0114e9d25da9ed405 --query Images[].OwnerId --output text
-aws ec2 copy-image --name ami-0114e9d25da9ed405 --source-image-id encrypted-alex --source-region ap-southeast-2 --encrypted --query ImageId --output text
+aws ec2 copy-image --name encrypted-alex --source-image-id ami-0114e9d25da9ed405 --source-region ap-southeast-2 --encrypted --query ImageId --output text
 aws ec2 describe-images --image-id ami-023d5e57238507bdf --query Images[].State --output text
 sleep 10
 aws ec2 describe-images --image-id ami-023d5e57238507bdf --query Images[].State --output text
