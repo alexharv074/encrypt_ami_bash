@@ -83,11 +83,11 @@ account_of() {
 }
 
 copy_image() {
-  local name=$1
-  local image_id=$2
+  local image_id=$1
+  local name=$2
   local encrypted_image_id
 
-  echo "Creating the AMI ..."
+  echo "Creating the AMI: $name"
 
   set -x
   encrypted_image_id=$(aws ec2 copy-image \
@@ -101,7 +101,7 @@ copy_image() {
 
   wait_for_image_state $encrypted_image_id 'available'
 
-  echo $encrypted_image_id
+  echo $encrypted_image_id > encrypted_image_id
 }
 
 create_image() {
@@ -117,7 +117,7 @@ create_image() {
   set +x
 
   wait_for_image_state $unencrypted_image_id 'available'
-  echo $unencrypted_image_id
+  echo $unencrypted_image_id > unencrypted_image_id
 }
 
 deregister_image() {
@@ -156,11 +156,11 @@ wait_for_instance_status() {
   echo "Waiting for instance ($instance_id) to become $desired_state..."
 
   while true ; do
-    state=$(aws ec2 describe-instance-status --instance-ids $instance_id \
-      --query 'InstanceStatuses[].InstanceState.Name' --output text)
+    state=$(aws ec2 describe-instances --instance-ids $instance_id \
+      --query 'Reservations[].Instances[].State.Name' --output text)
     [ "$state" == "$desired_state" ] && break
     echo "state: $state"
-    sleep 1
+    sleep 5
   done
 
   [ -z "$desired_status" ] && return
@@ -170,6 +170,9 @@ wait_for_instance_status() {
   while true ; do
     statu=$(aws ec2 describe-instance-status --instance-ids $instance_id \
       --query 'InstanceStatuses[].InstanceStatus.Status' --output text)
+    [ "$statu" == "$desired_status" ] && break
+    echo "state: $statu"
+    sleep 5
   done
 }
 
@@ -197,7 +200,7 @@ run_instance() {
 
   wait_for_instance_status $instance_id 'running' 'ok'
 
-  echo $instance_id
+  echo $instance_id > instance_id
 }
 
 stop_instance() {
@@ -205,7 +208,7 @@ stop_instance() {
 
   echo "Stopping the source AWS instance..."
 
-  aws ec2 stop-instances --instance-ids $instance_id
+  aws ec2 stop-instances --instance-ids $instance_id > /dev/null
   wait_for_instance_status $instance_id 'stopped'
 }
 
@@ -214,8 +217,12 @@ terminate_instance() {
 
   echo "Terminating the source AWS instance..."
 
-  aws ec2 terminate-instances --instance-ids $instance_id
+  aws ec2 terminate-instances --instance-ids $instance_id > /dev/null
   wait_for_instance_status $instance_id 'terminated'
+}
+
+clean_up() {
+  rm -f encrypted_image_id instance_id unencrypted_image_id
 }
 
 [ "$1" == "-h" ] && usage
@@ -239,3 +246,6 @@ else
   copy_image $unencrypted_image_id $image_name
   deregister_image $unencrypted_image_id
 fi
+
+echo "Encrypted AMI ID: $(<unencrypted_image_id)"
+clean_up
