@@ -4,9 +4,9 @@ usage() {
   echo "Usage: $0 [-h] SOURCE_IMAGE_ID \
 IMAGE_NAME \
 OS_TYPE \
-SUBNET_ID \
+[SUBNET_ID \
 IAM_INSTANCE_PROFILE \
-TAGS"
+TAGS]"
   exit 1
 }
 
