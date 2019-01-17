@@ -18,7 +18,7 @@ snapshot_ids=$(aws ec2 describe-images --image-ids $source_image_id \
 for account in "${target_accounts[@]}" ; do
 
   echo "Adding launch permission for $account to image $source_image_id..."
-  aws ec2 modify-image-attributes \
+  aws ec2 modify-image-attribute \
     --image-id $source_image_id \
     --launch-permission "Add=[{UserId=$account}]"
 
