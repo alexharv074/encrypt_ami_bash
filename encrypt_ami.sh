@@ -24,9 +24,9 @@ build_user_data() {
       $Os_Type = $matches[1]
     }
 
+    Write-Host "The operating system is $Os_Type"
+
     if ($Os_Type -eq '2012') {
-      Write-Host "The operating system is $Os_Type"
-      # Configuring the Launch Setting for win2k12
       $EC2SettingsFile = "C:\\Program Files\\Amazon\\Ec2ConfigService\\Settings\\Config.xml"
       $xml = [xml](get-content $EC2SettingsFile)
       $xmlElement = $xml.get_DocumentElement()
@@ -50,8 +50,6 @@ build_user_data() {
       $xml.Save($EC2SettingsFile)
 
     } elseif ($Os_Type -eq '2016') {
-      Write-Host "The operating system is $Os_Type"
-      # Configuring the Launch setting to enable the initialization for windows server 2016
       # Changes are made to LaunchConfig.json file
       $LaunchConfigFile = "C:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Config\\LaunchConfig.json"
       $jsoncontent = Get-Content $LaunchConfigFile | ConvertFrom-Json
@@ -65,7 +63,7 @@ build_user_data() {
       C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\SysprepInstance.ps1
 
     } else {
-      echo "No Operating System Found"
+      Write-Host "Don't know what to do for OS type $Os_Type"
     }
   </powershell>
 EOF
