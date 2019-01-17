@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+usage() {
+  echo "Usage: $0 [-h] SOURCE_IMAGE_ID \
+IMAGE_NAME \
+OS_TYPE \
+SUBNET_ID \
+IAM_INSTANCE_PROFILE \
+TAGS"
+  exit 1
+}
+
 this_account() {
   aws sts get-caller-identity \
     --query Account --output text

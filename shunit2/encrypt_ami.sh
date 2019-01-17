@@ -2,13 +2,11 @@
 
 script_under_test=$(basename $0)
 
-count=0
-
 aws() {
   echo "${FUNCNAME[0]} $*" >> commands_log
   case "${FUNCNAME[0]} $*" in
-  'aws sts get-caller-identity --query Account --output text') echo 326742889437 ;;
-  'aws ec2 describe-images --image-id ami-0114e9d25da9ed405 --query Images[].OwnerId --output text') echo 326742889437 ;;
+  'aws sts get-caller-identity --query Account --output text') echo 111111111111 ;;
+  'aws ec2 describe-images --image-id ami-0114e9d25da9ed405 --query Images[].OwnerId --output text') echo 111111111111 ;;
   'aws ec2 copy-image --name ami-0114e9d25da9ed405 --source-image-id encrypted-alex --source-region ap-southeast-2 --encrypted --query ImageId --output text') echo ami-023d5e57238507bdf ;;
   'aws ec2 describe-images --image-id ami-023d5e57238507bdf --query Images[].State --output text')
     count=$(<count)
@@ -34,7 +32,11 @@ sleep() {
 }
 
 tearDown() {
-  rm count commands_log expected_log
+  rm -f count commands_log expected_log
+}
+
+testUsage() {
+  assertTrue "unexpected output when testing script usage function" ". $script_under_test -h | grep -qi usage"
 }
 
 testScript() {
