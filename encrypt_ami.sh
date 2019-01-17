@@ -3,6 +3,7 @@
 usage() {
   echo "Usage: $0 [-h] SOURCE_IMAGE_ID \
 IMAGE_NAME \
+KMS_KEY_ID \
 OS_TYPE \
 [SUBNET_ID \
 IAM_INSTANCE_PROFILE \
@@ -83,6 +84,8 @@ account_of() {
 copy_image() {
   local image_id=$1
   local name=$2
+  local kms_key_id=$3
+
   local encrypted_image_id
 
   echo "Creating the AMI: $name"
@@ -93,6 +96,7 @@ copy_image() {
     --source-image-id $image_id \
     --source-region ap-southeast-2 \
     --encrypted \
+    --kms-key-id $kms_key_id \
     --query ImageId \
     --output text)
   set +x
@@ -227,13 +231,14 @@ clean_up() {
 
 source_image_id=$1
 image_name=$2
-os_type=$3
-subnet_id=$4
-iam_instance_profile=$5
-tags=$6
+kms_key_id=$3
+os_type=$4
+subnet_id=$5
+iam_instance_profile=$6
+tags=$7
 
 if [ "$(this_account)" == "$(account_of $source_image_id)" ] ; then
-  copy_image $source_image_id $image_name
+  copy_image $source_image_id $image_name $kms_key_id
 else
   run_instance $source_image_id $iam_instance_profile $subnet_id $os_type
   instance_id=$(<instance_id)
@@ -241,7 +246,7 @@ else
   create_image $instance_id "${image_name}-unencrypted"
   unencrypted_image_id=$(<unencrypted_image_id)
   terminate_instance $instance_id
-  copy_image $unencrypted_image_id $image_name
+  copy_image $unencrypted_image_id $image_name $kms_key_id
   deregister_image $unencrypted_image_id
 fi
 

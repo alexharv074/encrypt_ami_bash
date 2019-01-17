@@ -22,7 +22,7 @@ aws() {
     echo $count > count1
     ;;
   'aws ec2 describe-images --image-id ami-0114e9d25da9ed405 --query Images[].OwnerId --output text') echo 111111111111 ;;
-  'aws ec2 copy-image --name encrypted-alex --source-image-id ami-0114e9d25da9ed405 --source-region ap-southeast-2 --encrypted --query ImageId --output text')
+  'aws ec2 copy-image --name encrypted-alex --source-image-id ami-0114e9d25da9ed405 --source-region ap-southeast-2 --encrypted --kms-key-id alias/mykey --query ImageId --output text')
     echo ami-023d5e57238507bdf
     ;;
   'aws ec2 describe-images --image-id ami-023d5e57238507bdf --query Images[].State --output text')
@@ -116,7 +116,7 @@ EOF
 }
 EOF
     ;;
-  'aws ec2 copy-image --name encrypted-alex --source-image-id ami-02d59780171ffe88a --source-region ap-southeast-2 --encrypted --query ImageId --output text')
+  'aws ec2 copy-image --name encrypted-alex --source-image-id ami-02d59780171ffe88a --source-region ap-southeast-2 --encrypted --kms-key-id alias/mykey --query ImageId --output text')
     echo ami-02c1d3e42b630babc
     ;;
   'aws ec2 deregister-image --image-id ami-02d59780171ffe88a') true ;;
@@ -144,12 +144,12 @@ testEncryptSameAccount() {
     echo 1 > count$i
   done
 
-  . $script_under_test 'ami-0114e9d25da9ed405' 'encrypted-alex' 'windows' > /dev/null 2>&1
+  . $script_under_test 'ami-0114e9d25da9ed405' 'encrypted-alex' 'alias/mykey' 'windows' > /dev/null 2>&1
 
   cat > expected_log <<EOF
 aws sts get-caller-identity --query Account --output text
 aws ec2 describe-images --image-id ami-0114e9d25da9ed405 --query Images[].OwnerId --output text
-aws ec2 copy-image --name encrypted-alex --source-image-id ami-0114e9d25da9ed405 --source-region ap-southeast-2 --encrypted --query ImageId --output text
+aws ec2 copy-image --name encrypted-alex --source-image-id ami-0114e9d25da9ed405 --source-region ap-southeast-2 --encrypted --kms-key-id alias/mykey --query ImageId --output text
 aws ec2 describe-images --image-id ami-023d5e57238507bdf --query Images[].State --output text
 sleep 10
 aws ec2 describe-images --image-id ami-023d5e57238507bdf --query Images[].State --output text
@@ -168,7 +168,7 @@ testEncryptDifferentAccount() {
     echo 1 > count$i
   done
 
-  . $script_under_test 'ami-0114e9d25da9ed405' 'encrypted-alex' 'windows' 'subnet-08fa0f2711688bd28' 'CIMSAppServerInstanceProfile' '[{Key=CostCentre,Value=V_CIMS}]' > /dev/null 2>&1
+  . $script_under_test 'ami-0114e9d25da9ed405' 'encrypted-alex' 'alias/mykey' 'windows' 'subnet-08fa0f2711688bd28' 'CIMSAppServerInstanceProfile' '[{Key=CostCentre,Value=V_CIMS}]' > /dev/null 2>&1
 
   run_instances_command_abbreviated='aws ec2 run-instances'
   cat > expected_log <<EOF
@@ -207,7 +207,7 @@ sleep 5
 aws ec2 describe-instances --instance-ids i-060e9491b4a288669 --query Reservations[].Instances[].State.Name --output text
 sleep 5
 aws ec2 describe-instances --instance-ids i-060e9491b4a288669 --query Reservations[].Instances[].State.Name --output text
-aws ec2 copy-image --name encrypted-alex --source-image-id ami-02d59780171ffe88a --source-region ap-southeast-2 --encrypted --query ImageId --output text
+aws ec2 copy-image --name encrypted-alex --source-image-id ami-02d59780171ffe88a --source-region ap-southeast-2 --encrypted --kms-key-id alias/mykey --query ImageId --output text
 aws ec2 describe-images --image-id ami-02c1d3e42b630babc --query Images[].State --output text
 sleep 10
 aws ec2 describe-images --image-id ami-02c1d3e42b630babc --query Images[].State --output text
