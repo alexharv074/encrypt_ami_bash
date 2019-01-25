@@ -16,12 +16,10 @@ build_user_data() {
   [ "$os_type" != "windows" ] && return
   cat <<'EOF'
   <powershell>
-    # Check for the Version of Operating System
     $Cmd = Get-WmiObject -Class Win32_OperatingSystem | ForEach-Object -MemberName Caption
-    $Get_OS = $Cmd -match '(\d+)'
 
-    # Query and get the version number of the OS
-    if ($Get_Os) {
+    $Get_OS = $Cmd -match '(\d+)'
+    if ($Get_OS) {
       $Os_Type = $matches[1]
     }
 
@@ -51,6 +49,7 @@ build_user_data() {
       $xml.Save($EC2SettingsFile)
 
     } elseif ($Os_Type -eq '2016') {
+
       # Changes are made to LaunchConfig.json file
       $LaunchConfigFile = "C:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Config\\LaunchConfig.json"
       $jsoncontent = Get-Content $LaunchConfigFile | ConvertFrom-Json
